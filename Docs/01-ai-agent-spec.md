@@ -21,7 +21,7 @@ The agent is responsible for:
 
 Website chat only.
 
-**In scope:** restaurant info, menu browsing, item details, availability, add/remove/update cart, calculate total, order confirmation, order creation, basic conversation context, bilingual Arabic/English replies (agent replies in whichever language the customer is using).
+**In scope:** restaurant info, menu browsing, item details, availability, combos/bundle offers, add/remove/update cart, calculate total, order confirmation, order creation, returning-customer recognition by phone number, basic conversation context, bilingual Arabic/English replies (agent replies in whichever language the customer is using).
 
 **Out of scope for V1:** WhatsApp integration, voice interaction, payment processing, delivery-courier API integration, POS integration, human handoff, advanced RAG, multi-agent architecture, recommendation engine, live order tracking map, multi-branch management.
 
@@ -86,7 +86,13 @@ The LLM never accesses the database directly. All external operations go through
 Add item, remove item, change quantity, view current cart, calculate total.
 "Add another kofta." / "Remove the fries." / "Make it three." / "بكام الطلب كله؟"
 
-### 4.5 Order Confirmation
+### 4.5 Combos & Bundles
+"عندكم عروض؟", "Any combo deals?" → `get_combos`. Combos are shown alongside regular items (e.g. "Koshary Combo — Large Koshary + Drink + Salad — 220 EGP instead of 250 EGP"). Adding a combo to the cart adds all its component items as one line with the combo price; it never gets re-priced as the sum of individual items. If a component of a combo is unavailable, the agent must say so and offer the combo without that item at the regular combo logic defined by `combo_service` (see `03-backend-spec.md`) — never invent a substitute price itself.
+
+### 4.6 Returning Customer Recognition
+When a customer provides a phone number (either at the start of an order, or because they've ordered before in this browser and the number is already stored client-side), the agent can call `get_customer_last_order(phone)` to offer a shortcut: "عايز نفس طلب المرة اللي فاتت (2 كشري + مشروب)؟". This is a convenience, not a login system — no password, no account, just a phone-number lookup. If no prior order exists, the agent proceeds normally without mentioning it.
+
+### 4.7 Order Confirmation
 Before creating an order, the agent must show:
 - Ordered items, quantities, item prices, total price
 - Delivery vs. pickup choice, and address if delivery
@@ -133,12 +139,19 @@ Returns `{subtotal, delivery_fee, total, currency: "EGP"}`. The LLM must never c
 ### 5.9 `get_restaurant_info()`
 Opening hours, address, delivery zones, payment methods (cash on delivery / cash on pickup for V1), contact number.
 
+### 5.10 `get_combos()`
+Returns active combo deals: `{id, name, name_ar, items: [item_id...], combo_price, available}`. `available` is `false` automatically if any required component is unavailable (computed by `combo_service`, never by the LLM).
+
+### 5.11 `get_customer_last_order(phone)`
+Returns the most recent completed/delivered order for that phone number, or `null`: `{items: [{item_id, name, quantity}], order_type}`. Used only to offer a "same as last time" shortcut — never auto-adds anything to the cart without the customer confirming.
+
 ## 6. Agent State
 
 ```python
 class RestaurantAgentState:
     conversation_id: str
     customer_id: str | None
+    customer_phone: str | None      # used only for the last-order lookup shortcut
     messages: list
     intent: str | None
     cart: list
@@ -212,18 +225,21 @@ Your responsibilities:
 - Help customers browse the menu and answer restaurant questions.
 - Help customers build their cart.
 - Verify item availability before adding to cart.
+- Mention active combos when relevant, using get_combos only.
+- Offer a returning customer their last order as a shortcut, never assume it.
 - Provide accurate prices and totals using tools only.
 - Ask whether the order is delivery or pickup.
 - Ask for confirmation before creating an order.
 
 Rules:
-1. Never invent menu items or prices.
+1. Never invent menu items, combos, or prices.
 2. Never claim an order was created unless create_order succeeded.
 3. Never create an order without explicit customer confirmation.
-4. Always use tools for menu, availability, and pricing.
+4. Always use tools for menu, availability, combos, and pricing.
 5. Ask for missing information (size, quantity, address) when needed.
 6. Keep responses short, friendly, and free of robotic phrasing.
 7. If a tool fails, say so clearly instead of guessing.
+8. Never add a "last order" or combo to the cart without the customer confirming it first.
 ```
 
 ## 12. Example Conversations
@@ -245,6 +261,15 @@ Koshary × 2 — 180 EGP
 
 Customer: أيوه
 Agent: تم تأكيد طلبك رقم #1024. هيوصلك خلال 40-50 دقيقة تقريبًا.
+```
+
+**Returning customer + combo**
+```
+Customer: اهلا، رقمي 01012345678
+Agent: أهلاً بيك تاني! آخر مرة طلبت 2 كشري + مياه غازية — تحب نفس الطلب ولا حاجة جديدة النهارده؟
+
+Customer: في حاجة جديدة؟
+Agent: عندنا عرض كومبو كشري (كشري كبير + مشروب + سلطة) بـ220 جنيه بدل 250. تحب تجربه؟
 ```
 
 **Unknown item**
@@ -276,7 +301,8 @@ Agent: عندنا برجر لحمة وبرجر فراخ — تحب أي واحد
 4. `agent/agent.py` — RestaurantAgent class
 5. `process_message()` — conversation processing
 6. Confirmation logic (`awaiting_confirmation`, `order_confirmed`)
-7. Test complete ordering flows end to end, in both Arabic and English
+7. Add `get_combos()` and `get_customer_last_order()` tools once the core flow works
+8. Test complete ordering flows end to end, in both Arabic and English, including a combo purchase and a returning-customer shortcut
 
 ## 15. Agent Interface
 

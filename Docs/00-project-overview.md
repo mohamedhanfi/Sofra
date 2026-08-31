@@ -19,8 +19,11 @@ This overview ties together three companion documents:
 
 - One restaurant, one branch, one language pair (Arabic + English), website only (no WhatsApp/voice yet).
 - Customer can chat with the AI agent to browse the menu, ask questions, build a cart, and confirm an order.
-- Owner can fully manage the menu and see live order status.
-- Order status lifecycle: **Pending → In Preparation → Ready → Out for Delivery (if delivery) → Delivered/Completed**.
+- Owner can fully manage the menu and combos, and see orders update live (no manual refresh) as they move through their lifecycle.
+- Order status lifecycle: **Pending → In Preparation → Ready → Out for Delivery (if delivery) → Delivered/Completed**, with an optional 1-5 star rating collected right after.
+- Returning customers can be recognized by phone number for a quick "same as last time" shortcut — no accounts or passwords.
+- Combo/bundle offers (e.g. "Koshary Combo") are a first-class menu concept, not just a discount code.
+- The owner gets a lightweight analytics view (revenue, top items, peak hours) built from plain SQL over the existing tables — no separate analytics stack.
 - No payment gateway in V1 — orders are confirmed and paid on delivery/pickup (Cash on Delivery), matching how most local Egyptian restaurant sites currently operate.
 
 ## 3. Order Status Lifecycle (used across all three docs)
@@ -40,6 +43,8 @@ cancelled  (can happen from pending or preparing, owner-triggered)
 | `delivered` | Only for delivery orders, confirmed delivered | Owner |
 | `completed` | Only for pickup/dine-in orders, handed to customer | Owner |
 | `cancelled` | Order cancelled | Owner |
+
+Once an order reaches `delivered` or `completed`, the customer's status page offers a one-time 1-5 star rating (optional, skippable) — this is the only step after the lifecycle above and never blocks or delays it.
 
 ## 4. High-Level System Diagram
 
@@ -78,25 +83,31 @@ egyptian-restaurant-platform/
 │   ├── app/
 │   │   ├── main.py                 # app entrypoint, mounts routers
 │   │   ├── database.py             # SQLite connection/session setup
-│   │   ├── models.py                # ORM models (Item, Order, OrderItem, Cart, RestaurantInfo)
+│   │   ├── models.py                # ORM models (Item, Combo, ComboItem, Order, OrderItem, Cart, Customer, Rating, RestaurantInfo)
 │   │   ├── schemas.py               # request/response validation schemas
+│   │   ├── ws.py                     # /ws/admin/orders connection manager
 │   │   │
 │   │   ├── routers/
 │   │   │   ├── chat.py              # POST /chat  (AI agent entrypoint)
-│   │   │   ├── menu.py              # public + admin menu endpoints
-│   │   │   ├── orders.py            # order creation + status endpoints
+│   │   │   ├── menu.py              # public + admin menu & combo endpoints
+│   │   │   ├── orders.py            # order creation, status, rating endpoints
+│   │   │   ├── customers.py         # last-order lookup by phone
+│   │   │   ├── analytics.py         # admin analytics summary
 │   │   │   └── restaurant.py        # restaurant info endpoints
 │   │   │
 │   │   ├── agent/
 │   │   │   ├── agent.py             # RestaurantAgent class, process_message()
 │   │   │   ├── state.py             # AgentState
 │   │   │   ├── prompts.py           # system prompt
-│   │   │   └── tools.py             # get_menu, add_to_cart, calculate_total, create_order, etc.
+│   │   │   └── tools.py             # get_menu, get_combos, add_to_cart, calculate_total, create_order, etc.
 │   │   │
 │   │   └── services/
 │   │       ├── menu_service.py      # menu CRUD used by both agent tools and admin API
+│   │       ├── combo_service.py
 │   │       ├── cart_service.py
-│   │       └── order_service.py
+│   │       ├── order_service.py
+│   │       ├── customer_service.py
+│   │       └── analytics_service.py
 │   │
 │   ├── restaurant.db                # SQLite database file
 │   ├── requirements.txt
@@ -104,18 +115,18 @@ egyptian-restaurant-platform/
 │
 ├── frontend-customer/
 │   ├── src/
-│   │   ├── pages/                    # Home, Menu, Chat/Order, OrderStatus
-│   │   ├── components/               # ChatWidget, MenuCard, CartDrawer, ConfirmModal
+│   │   ├── pages/                    # Home, Menu, Chat/Order, OrderStatus (incl. rating prompt)
+│   │   ├── components/               # ChatWidget, MenuCard, ComboCard, CartDrawer, ConfirmModal, RatingStars
 │   │   ├── styles/                   # theme.css (colors, fonts)
 │   │   └── api/                      # fetch wrappers to backend
 │   └── package.json
 │
 ├── frontend-owner/
 │   ├── src/
-│   │   ├── pages/                    # Login, Dashboard, MenuManagement, OrdersBoard
-│   │   ├── components/               # ItemForm, OrderCard, StatusDropdown
+│   │   ├── pages/                    # Login, Dashboard, MenuManagement, ComboManagement, OrdersBoard, Analytics
+│   │   ├── components/               # ItemForm, ComboForm, OrderCard, StatusDropdown, LiveIndicator, AnalyticsChart
 │   │   ├── styles/
-│   │   └── api/
+│   │   └── api/                      # includes a ws.js socket client for /ws/admin/orders
 │   └── package.json
 │
 └── docs/
