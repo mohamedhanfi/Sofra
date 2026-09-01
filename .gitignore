@@ -1,0 +1,15 @@
+# Python / backend
+backend/.venv/
+__pycache__/
+*.pyc
+*.db
+
+# Node / Vite
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Env & local
+.env
+*.local
+.DS_Store
