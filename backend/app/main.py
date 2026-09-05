@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import models  # noqa: F401  (register models so create_all sees every table)
 from . import ws
+from . import errors
 from .database import Base, engine
 from .routers import analytics, auth, cart, chat, customers, menu, orders, restaurant, ws as ws_router
 from .seed import seed_if_empty
@@ -32,9 +33,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_exception_handler(errors.APIError, errors.api_error_handler)
+
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+    CORSMiddleware,    allow_origins=[
         "http://localhost:5173",
         "http://localhost:5174",
         "http://127.0.0.1:5173",

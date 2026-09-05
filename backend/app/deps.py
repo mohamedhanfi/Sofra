@@ -7,9 +7,11 @@ from the environment with sane defaults.
 
 import os
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from dotenv import load_dotenv
+
+from . import errors
 
 load_dotenv()
 
@@ -33,4 +35,4 @@ def require_admin(
     credentials: HTTPAuthorizationCredentials | None = Depends(_security),
 ) -> None:
     if credentials is None or credentials.credentials != ADMIN_TOKEN:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        raise errors.unauthorized()

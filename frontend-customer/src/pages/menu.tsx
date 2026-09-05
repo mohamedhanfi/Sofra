@@ -30,10 +30,12 @@ export default function Menu() {
   const [search, setSearch] = useState('')
   const [menuItems, setMenuItems] = useState<MenuItem[]>([])
   const [combos, setCombos] = useState<Combo[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    getMenu(true).then(setMenuItems).catch(() => {})
-    getCombos().then(setCombos).catch(() => {})
+    Promise.all([getMenu(true).then(setMenuItems), getCombos().then(setCombos)])
+      .catch(() => {})
+      .finally(() => setLoading(false))
   }, [])
 
   const categories = useMemo(
@@ -102,10 +104,12 @@ export default function Menu() {
       </div>
 
       <section className="menu-grid">
-        {filtered.map((item) => (
-          <MenuCard key={item.id} item={item} />
-        ))}
-        {filtered.length === 0 && (
+        {loading ? (
+          <div className="menu-empty">{t('Loading menu...', 'جاري تحميل المنيو...')}</div>
+        ) : (
+          filtered.map((item) => <MenuCard key={item.id} item={item} />)
+        )}
+        {!loading && filtered.length === 0 && (
           <div className="menu-empty">{t('No items found.', 'مفيش حاجة هنا.')}</div>
         )}
       </section>
